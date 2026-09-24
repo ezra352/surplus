@@ -1,0 +1,24 @@
+# Render Blueprint for Surplus — deploys the web service with one click.
+# In Render: New > Blueprint > connect the repo containing this file.
+services:
+  - type: web
+    name: surplus
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        value: price_1UJ0Y14yVPejRUmhlKU7Cga6
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: APP_URL
+        sync: false
+      # OPENAI_API_KEY is optional — leave unset until AI is enabled.

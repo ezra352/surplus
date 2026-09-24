@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Surplus — Your AI Assistant for Amazon Selling</title>
+<meta name="description" content="Surplus is an AI assistant for Amazon sellers: find lost reimbursements, optimize listings, research products, and master your numbers.">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- ============ LANDING ============ -->
+<div id="view-landing" class="view">
+  <header class="nav">
+    <div class="nav-inner">
+      <div class="logo"><span class="logo-mark">S</span> Surplus</div>
+      <div class="nav-actions">
+        <button class="btn btn-ghost" data-go="login">Log in</button>
+        <button class="btn btn-primary" data-go="signup">Start free</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="pill">Built for Amazon FBA sellers</div>
+      <h1>Your AI copilot for selling on Amazon</h1>
+      <p class="sub">Find money Amazon owes you, write listings that convert, research winning products, and master your profit math — all in one place.</p>
+      <div class="hero-cta">
+        <button class="btn btn-primary btn-lg" data-go="signup">Start free</button>
+        <a class="btn btn-ghost btn-lg" href="#pricing">See pricing</a>
+      </div>
+      <p class="tiny">Free to try · Upgrade to Premium for the full AI copilot</p>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="section-inner">
+      <h2>Everything a seller needs, one assistant</h2>
+      <div class="grid">
+        <div class="card"><div class="icon">💰</div><h3>Cash recovery</h3><p>Spot reimbursements for lost or damaged inventory and fee overcharges, and draft sharp claim requests.</p></div>
+        <div class="card"><div class="icon">✍️</div><h3>Listing optimizer</h3><p>Titles, bullets, and descriptions written to convert — tuned for Amazon search.</p></div>
+        <div class="card"><div class="icon">🔍</div><h3>Product research</h3><p>Evaluate niches, size up competition, and sanity-check ideas before you spend a dollar.</p></div>
+        <div class="card"><div class="icon">📊</div><h3>Profit math</h3><p>FBA fees, margins, and break-even — calculated for you, step by step.</p></div>
+        <div class="card"><div class="icon">📦</div><h3>Inventory planning</h3><p>Reorder points and safety stock so you never stock out (or overstock).</p></div>
+        <div class="card"><div class="icon">📣</div><h3>PPC guidance</h3><p>Campaign structure and bid basics explained in plain English.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" class="pricing">
+    <div class="section-inner">
+      <h2>Simple pricing</h2>
+      <div class="price-card">
+        <h3>Premium</h3>
+        <div class="price" id="price-display"><span class="amount">…</span><span class="per">/month</span></div>
+        <ul>
+          <li>✓ Unlimited access to the AI seller copilot</li>
+          <li>✓ All tools: recovery, listings, research, profit, inventory</li>
+          <li>✓ Generous daily message allowance</li>
+          <li>✓ Cancel anytime in one click</li>
+        </ul>
+        <button class="btn btn-primary btn-lg" data-go="signup">Start free</button>
+        <p class="tiny">Sign up free, upgrade when you're ready.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="section-inner">
+      <p><strong>Surplus</strong> — the AI assistant for Amazon sellers.</p>
+      <p class="tiny">Surplus is an independent tool and is not affiliated with Amazon.com, Inc.</p>
+    </div>
+  </footer>
+</div>
+
+<!-- ============ AUTH ============ -->
+<div id="view-auth" class="view hidden">
+  <header class="nav">
+    <div class="nav-inner">
+      <div class="logo" data-go="landing" style="cursor:pointer"><span class="logo-mark">S</span> Surplus</div>
+    </div>
+  </header>
+  <section class="auth-wrap">
+    <div class="auth-card">
+      <div class="tabs">
+        <button id="tab-signup" class="tab active">Sign up</button>
+        <button id="tab-login" class="tab">Log in</button>
+      </div>
+      <form id="form-signup" class="auth-form">
+        <h2>Create your account</h2>
+        <label>Email<input type="email" id="su-email" required autocomplete="email"></label>
+        <label>Password (min 8 characters)<input type="password" id="su-password" required minlength="8" autocomplete="new-password"></label>
+        <div class="form-error hidden" id="su-error"></div>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">Create account</button>
+      </form>
+      <form id="form-login" class="auth-form hidden">
+        <h2>Welcome back</h2>
+        <label>Email<input type="email" id="li-email" required autocomplete="email"></label>
+        <label>Password<input type="password" id="li-password" required autocomplete="current-password"></label>
+        <div class="form-error hidden" id="li-error"></div>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">Log in</button>
+      </form>
+    </div>
+  </section>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="view-app" class="view hidden">
+  <header class="app-header">
+    <div class="logo"><span class="logo-mark">S</span> Surplus</div>
+    <div class="app-header-right">
+      <span class="usage-pill hidden" id="usage-pill"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-billing">Billing</button>
+      <button class="btn btn-ghost btn-sm" id="btn-logout">Log out</button>
+    </div>
+  </header>
+
+  <div id="paywall" class="paywall hidden">
+    <div class="paywall-card">
+      <h2>Unlock your AI copilot</h2>
+      <p>Your free account is ready. Upgrade to Premium to chat with the AI seller copilot and use every tool.</p>
+      <div class="price" id="price-display-app"><span class="amount">…</span><span class="per">/month</span></div>
+      <button class="btn btn-primary btn-lg" id="btn-upgrade">Upgrade to Premium</button>
+      <p class="tiny">Secure checkout via Stripe · Cancel anytime</p>
+    </div>
+  </div>
+
+  <div id="app-main" class="hidden">
+    <nav class="app-tabs">
+      <button class="app-tab active" data-tab="chat">💬 Copilot</button>
+      <button class="app-tab" data-tab="recovery">💰 Recovery</button>
+      <button class="app-tab" data-tab="inventory">📦 Inventory</button>
+      <button class="app-tab" data-tab="listings">✍️ Listings</button>
+      <button class="app-tab" data-tab="profit">📊 Profit</button>
+      <button class="app-tab" data-tab="research">🔍 Research</button>
+    </nav>
+
+    <main class="app-body">
+      <!-- CHAT -->
+      <section id="tab-chat" class="tab-panel">
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" type="text" placeholder="Ask your seller copilot anything…" autocomplete="off">
+          <button class="btn btn-primary" id="chat-send">Send</button>
+        </div>
+      </section>
+
+      <!-- RECOVERY -->
+      <section id="tab-recovery" class="tab-panel hidden">
+        <h2>Cash recovery</h2>
+        <p class="muted">Amazon sometimes owes sellers money — lost or damaged inventory, fee overcharges, wrong refunds. Work the checklist, then ask the copilot to draft your claim.</p>
+        <div class="checklist" id="recovery-checklist"></div>
+        <button class="btn btn-primary" id="btn-recovery-ask">Ask copilot to draft my claim →</button>
+      </section>
+
+      <!-- INVENTORY -->
+      <section id="tab-inventory" class="tab-panel hidden">
+        <h2>Inventory planner</h2>
+        <p class="muted">Enter your numbers to get a reorder point and suggested order quantity.</p>
+        <div class="form-grid">
+          <label>Average units sold per day<input type="number" id="inv-daily" min="0" value="10"></label>
+          <label>Supplier lead time (days)<input type="number" id="inv-lead" min="0" value="30"></label>
+          <label>Safety stock (days of sales)<input type="number" id="inv-safety" min="0" value="14"></label>
+          <label>Current stock on hand<input type="number" id="inv-stock" min="0" value="200"></label>
+        </div>
+        <button class="btn btn-primary" id="btn-inv-calc">Calculate</button>
+        <div id="inv-result" class="result hidden"></div>
+      </section>
+
+      <!-- LISTINGS -->
+      <section id="tab-listings" class="tab-panel hidden">
+        <h2>Listing optimizer</h2>
+        <p class="muted">Describe your product and the copilot will write an optimized title, bullets, and description.</p>
+        <div class="form-grid">
+          <label>Product name<input type="text" id="list-name" placeholder="e.g. Insulated stainless water bottle 32oz"></label>
+          <label>Key features (one per line)<textarea id="list-features" rows="3" placeholder="Keeps drinks cold 24h&#10;Leak-proof lid&#10;Fits car cup holders"></textarea></label>
+          <label>Target keywords (comma separated)<input type="text" id="list-keywords" placeholder="water bottle, insulated bottle, gym bottle"></label>
+        </div>
+        <button class="btn btn-primary" id="btn-listing-gen">Generate with AI →</button>
+      </section>
+
+      <!-- PROFIT -->
+      <section id="tab-profit" class="tab-panel hidden">
+        <h2>Profit calculator</h2>
+        <p class="muted">See your true margin per unit before you commit to a product.</p>
+        <div class="form-grid">
+          <label>Selling price ($)<input type="number" id="pr-price" min="0" step="0.01" value="29.99"></label>
+          <label>Unit cost / COGS ($)<input type="number" id="pr-cogs" min="0" step="0.01" value="8.50"></label>
+          <label>Inbound shipping per unit ($)<input type="number" id="pr-ship" min="0" step="0.01" value="1.20"></label>
+          <label>Referral fee %<input type="number" id="pr-referral" min="0" step="0.1" value="15"></label>
+          <label>FBA fulfillment fee ($)<input type="number" id="pr-fba" min="0" step="0.01" value="5.50"></label>
+          <label>Ad spend per unit ($)<input type="number" id="pr-ads" min="0" step="0.01" value="2.00"></label>
+        </div>
+        <button class="btn btn-primary" id="btn-profit-calc">Calculate</button>
+        <div id="profit-result" class="result hidden"></div>
+      </section>
+
+      <!-- RESEARCH -->
+      <section id="tab-research" class="tab-panel hidden">
+        <h2>Product research</h2>
+        <p class="muted">Pick a starting point — the copilot will guide the analysis.</p>
+        <div class="template-list">
+          <button class="template" data-prompt="Help me evaluate a product idea for Amazon FBA. Ask me for the product, then walk me through demand signals, competition, differentiation, and a realistic launch budget.">💡 Evaluate a product idea</button>
+          <button class="template" data-prompt="Help me analyze competitors for a product I want to sell on Amazon. Tell me what information you need from me first.">⚔️ Analyze competitors</button>
+          <button class="template" data-prompt="Help me estimate a realistic launch budget for a new Amazon FBA product, including inventory, shipping, photography, and PPC. Ask me for my product details first.">💵 Estimate a launch budget</button>
+          <button class="template" data-prompt="What are the most common mistakes new Amazon FBA sellers make, and how do I avoid each one?">⚠️ Avoid beginner mistakes</button>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
