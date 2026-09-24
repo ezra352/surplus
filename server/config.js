@@ -40,6 +40,10 @@ const config = {
 
   // Max AI chat messages per user per day (cost control).
   dailyMessageLimit: parseInt(process.env.DAILY_MESSAGE_LIMIT || '100', 10),
+
+  // Password protecting the /admin.html page and /api/admin endpoints.
+  // OPTIONAL: the app boots without it, but the admin tools 503 until set.
+  adminPassword: process.env.ADMIN_PASSWORD || null,
 };
 
 module.exports = config;

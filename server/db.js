@@ -43,7 +43,10 @@ function today() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
 
-const ACTIVE_STATUSES = new Set(['trialing', 'active']);
+const ACTIVE_STATUSES = new Set(['trialing', 'active', 'comped']);
+// 'comped' = free Premium granted by the owner via /api/admin/grant.
+// Stripe webhooks only ever set real Stripe statuses, so a comped account
+// keeps its free Premium until the owner revokes it.
 
 module.exports = {
   db,
@@ -60,6 +63,10 @@ module.exports = {
 
   findUserById(id) {
     return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  },
+
+  listUsers() {
+    return db.prepare('SELECT * FROM users ORDER BY created_at DESC, id DESC').all();
   },
 
   setStripeCustomerId(userId, customerId) {

@@ -7,6 +7,7 @@ const config = require('./config');
 const { router: authRouter, sessionMiddleware } = require('./auth');
 const stripe = require('./stripe');
 const ai = require('./ai');
+const admin = require('./admin');
 
 const app = express();
 app.set('trust proxy', 1); // correct secure cookies behind Railway/Render proxies
@@ -21,6 +22,7 @@ app.use(sessionMiddleware);
 
 app.use('/api/auth', authRouter);
 app.use('/api/billing', stripe.router);
+app.use('/api/admin', admin.router);
 app.use('/api', ai.router);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

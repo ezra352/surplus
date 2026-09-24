@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Surplus Admin</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #f6f7f9; color: #1a1a1a; margin: 0; padding: 24px; }
+  .card { max-width: 640px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: #666; font-size: 14px; margin: 0 0 20px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  input { width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 15px; border: 1px solid #ddd; border-radius: 8px; }
+  .row { display: flex; gap: 10px; margin-top: 16px; }
+  button { flex: 1; padding: 12px; font-size: 15px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
+  .grant { background: #16a34a; color: #fff; }
+  .revoke { background: #fff; color: #b91c1c; border: 1px solid #f0caca !important; }
+  button:disabled { opacity: .5; }
+  #msg { margin-top: 14px; font-size: 14px; min-height: 20px; }
+  #msg.ok { color: #16a34a; } #msg.err { color: #b91c1c; }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; }
+  th { color: #666; font-size: 12px; text-transform: uppercase; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .b-comped { background: #e0f2fe; color: #0369a1; }
+  .b-active { background: #dcfce7; color: #15803d; }
+  .b-none { background: #f1f5f9; color: #64748b; }
+  .b-other { background: #fef3c7; color: #92400e; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Surplus Admin</h1>
+  <p class="sub">Give free Premium accounts. The person must sign up first — then type their email below.</p>
+  <label for="pw">Admin password</label>
+  <input type="password" id="pw" placeholder="The ADMIN_PASSWORD from your server settings" autocomplete="off">
+  <label for="email">User email</label>
+  <input type="email" id="email" placeholder="seller@example.com" autocomplete="off">
+  <div class="row">
+    <button class="grant" id="grantBtn">Make Premium (free)</button>
+    <button class="revoke" id="revokeBtn">Remove Premium</button>
+  </div>
+  <div id="msg"></div>
+  <table id="users" style="display:none">
+    <thead><tr><th>Email</th><th>Status</th><th>Signed up</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const msg = (t, cls) => { const m = $('msg'); m.textContent = t; m.className = cls || ''; };
+const headers = () => ({ 'Content-Type': 'application/json', 'x-admin-password': $('pw').value });
+
+function badge(s) {
+  const cls = s === 'comped' ? 'b-comped' : s === 'active' ? 'b-active' : s === 'none' ? 'b-none' : 'b-other';
+  const label = s === 'comped' ? 'Free Premium' : s === 'active' ? 'Paying' : s === 'none' ? 'Free' : s;
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+async function refresh() {
+  if (!$('pw').value) return;
+  try {
+    const r = await fetch('/api/admin/users', { headers: headers() });
+    if (!r.ok) return;
+    const { users } = await r.json();
+    const tb = document.querySelector('#users tbody');
+    tb.innerHTML = users.map(u =>
+      `<tr><td>${u.email}</td><td>${badge(u.subscriptionStatus)}</td><td>${u.createdAt.slice(0,10)}</td></tr>`
+    ).join('');
+    $('users').style.display = users.length ? '' : 'none';
+  } catch (e) { /* server asleep or unreachable */ }
+}
+
+async function act(path, verb) {
+  const email = $('email').value.trim();
+  if (!$('pw').value) return msg('Enter the admin password first.', 'err');
+  if (!email) return msg('Enter the user\'s email first.', 'err');
+  msg(verb + '…');
+  try {
+    const r = await fetch(path, { method: 'POST', headers: headers(), body: JSON.stringify({ email }) });
+    const d = await r.json();
+    if (!r.ok) return msg(d.error || 'Something went wrong.', 'err');
+    msg(`${d.user.email} → ${d.user.subscriptionStatus === 'comped' ? 'Free Premium granted' : 'Premium removed'}.`, 'ok');
+    $('email').value = '';
+    refresh();
+  } catch (e) { msg('Could not reach the server.', 'err'); }
+}
+
+$('grantBtn').onclick = () => act('/api/admin/grant', 'Granting');
+$('revokeBtn').onclick = () => act('/api/admin/revoke', 'Revoking');
+$('pw').addEventListener('change', refresh);
+refresh();
+</script>
+</body>
+</html>
