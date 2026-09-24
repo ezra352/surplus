@@ -1,11 +1,15 @@
-// AI chat proxy. The browser never talks to OpenAI directly and never sees
-// the API key or the system prompt. Premium subscribers only, with a daily
-// per-user message cap to control costs.
+// Chat + deterministic tools proxy. Premium subscribers only.
+// If an OpenAI key is configured, /api/chat uses it (existing behavior).
+// If not, it answers from the built-in seller playbook (server/knowledge.js)
+// so the copilot is useful with zero AI cost. Nothing here is deleted —
+// the AI path is kept intact and takes priority when enabled.
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const db = require('./db');
 const { requireAuth, requirePremium } = require('./auth');
+const { findAnswer, fallbackAnswer } = require('./knowledge');
+const { buildClaim, buildListing } = require('./generators');
 
 const router = express.Router();
 
@@ -49,26 +53,20 @@ function sanitizeMessages(messages) {
   return clean;
 }
 
+function lastUserMessage(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return messages[i].content;
+  }
+  return '';
+}
+
 router.get('/chat/limit', requireAuth, (req, res) => {
+  // With AI enabled the daily cap applies; the playbook is unlimited.
+  if (!config.openaiApiKey) return res.json({ used: 0, limit: null, unlimited: true });
   res.json({ used: db.getDailyUsage(req.user.id), limit: config.dailyMessageLimit });
 });
 
-router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) => {
-  if (!config.openaiApiKey) {
-    return res.status(503).json({ error: 'The AI copilot is not enabled yet. The calculators and checklists below work fully without it.' });
-  }
-  const messages = sanitizeMessages(req.body && req.body.messages);
-  if (!messages) {
-    return res.status(400).json({ error: 'Invalid message format.' });
-  }
-
-  const used = db.getDailyUsage(req.user.id);
-  if (used >= config.dailyMessageLimit) {
-    return res.status(429).json({
-      error: `Daily message limit reached (${config.dailyMessageLimit}/day on Premium). It resets tomorrow.`,
-    });
-  }
-
+async function aiReply(messages) {
   let apiRes;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000); // 30s upstream timeout
@@ -89,7 +87,7 @@ router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) 
     });
   } catch (e) {
     console.error('OpenAI request failed:', e.message);
-    return res.status(502).json({ error: 'The AI service is unreachable right now. Please try again shortly.' });
+    return { status: 502, error: 'The AI service is unreachable right now. Please try again shortly.' };
   } finally {
     clearTimeout(timeout);
   }
@@ -97,25 +95,68 @@ router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) 
   if (!apiRes.ok) {
     const status = apiRes.status;
     console.error('OpenAI API error:', status);
-    if (status === 401) return res.status(500).json({ error: 'AI is not configured correctly. Please contact support.' });
-    if (status === 429) return res.status(429).json({ error: 'The AI is busy right now. Please wait a moment and retry.' });
-    return res.status(502).json({ error: 'The AI service returned an error. Please try again.' });
+    if (status === 401) return { status: 500, error: 'AI is not configured correctly. Please contact support.' };
+    if (status === 429) return { status: 429, error: 'The AI is busy right now. Please wait a moment and retry.' };
+    return { status: 502, error: 'The AI service returned an error. Please try again.' };
   }
 
   let data;
   try {
     data = await apiRes.json();
   } catch (e) {
-    return res.status(502).json({ error: 'Could not read the AI response. Please try again.' });
+    return { status: 502, error: 'Could not read the AI response. Please try again.' };
   }
 
   const reply = data.choices && data.choices[0] && data.choices[0].message
     ? data.choices[0].message.content
     : null;
-  if (!reply) return res.status(502).json({ error: 'Empty AI response. Please try again.' });
+  if (!reply) return { status: 502, error: 'Empty AI response. Please try again.' };
+  return { status: 200, reply };
+}
+
+router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) => {
+  const messages = sanitizeMessages(req.body && req.body.messages);
+  if (!messages) {
+    return res.status(400).json({ error: 'Invalid message format.' });
+  }
+
+  // No AI key: answer from the built-in seller playbook (free, unlimited).
+  if (!config.openaiApiKey) {
+    const answer = findAnswer(lastUserMessage(messages)) || fallbackAnswer();
+    return res.json({ reply: answer, used: 0, limit: null, unlimited: true, source: 'playbook' });
+  }
+
+  const used = db.getDailyUsage(req.user.id);
+  if (used >= config.dailyMessageLimit) {
+    return res.status(429).json({
+      error: `Daily message limit reached (${config.dailyMessageLimit}/day on Premium). It resets tomorrow.`,
+    });
+  }
+
+  const result = await aiReply(messages);
+  if (result.status !== 200) return res.status(result.status).json({ error: result.error });
 
   db.incrementDailyUsage(req.user.id);
-  res.json({ reply, used: used + 1, limit: config.dailyMessageLimit });
+  res.json({ reply: result.reply, used: used + 1, limit: config.dailyMessageLimit, source: 'ai' });
+});
+
+// ---------- Deterministic tools (work with or without AI) ----------
+router.post('/tools/claim', requireAuth, requirePremium, chatLimiter, (req, res) => {
+  try {
+    const letter = buildClaim(req.body || {});
+    res.json(letter);
+  } catch (e) {
+    res.status(400).json({ error: 'Could not build the claim letter. Check your inputs.' });
+  }
+});
+
+router.post('/tools/listing', requireAuth, requirePremium, chatLimiter, (req, res) => {
+  try {
+    const listing = buildListing(req.body || {});
+    res.json(listing);
+  } catch (e) {
+    res.status(400).json({ error: 'Could not build the listing. Check your inputs.' });
+  }
 });
 
 module.exports = { router };

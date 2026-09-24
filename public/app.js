@@ -146,7 +146,7 @@
     if (premium) {
       refreshUsage();
       if (state.chatHistory.length === 0) {
-        addMsg('ai', 'Hi! I\'m your AI seller copilot. Ask me about reimbursements, listings, product research, profit math, inventory, or PPC — or pick a tool above.');
+        addMsg('ai', 'Hi! I\'m your seller copilot. Ask me about fees, reimbursements, listings, PPC, product research, or inventory — or use the tools above. I answer from the seller playbook, instantly and free.');
       }
     }
   }
@@ -154,6 +154,7 @@
   function refreshUsage() {
     api('/api/chat/limit').then(function (d) {
       var pill = $('usage-pill');
+      if (d.unlimited || !d.limit) { pill.classList.add('hidden'); return; }
       pill.classList.remove('hidden');
       pill.textContent = d.used + ' / ' + d.limit + ' messages today';
     }).catch(function () {});
@@ -286,27 +287,171 @@
     $('profit-result').classList.remove('hidden');
   });
 
-  // ---------- Listing generator → copilot ----------
-  $('btn-listing-gen').addEventListener('click', function () {
-    var name = $('list-name').value.trim();
-    var feats = $('list-features').value.trim();
-    var kws = $('list-keywords').value.trim();
-    if (!name) { alert('Please enter your product name first.'); return; }
-    var prompt = 'Write an optimized Amazon listing for this product.\n\nProduct: ' + name +
-      (feats ? '\nKey features:\n' + feats : '') +
-      (kws ? '\nTarget keywords: ' + kws : '') +
-      '\n\nGive me: 1) an optimized title (under 200 characters), 2) five bullet points, 3) a product description, 4) backend search terms. Follow Amazon listing policy.';
-    goToChatTab();
-    sendChat(prompt);
+  // ---------- Claim letter builder ----------
+  $('btn-claim-build').addEventListener('click', function () {
+    var payload = {
+      claimType: $('claim-type').value,
+      name: $('claim-name').value,
+      asin: $('claim-asin').value,
+      shipmentId: $('claim-shipid').value,
+      orderId: $('claim-shipid').value,
+      date: $('claim-date').value,
+      units: $('claim-units').value,
+      received: $('claim-received').value,
+      value: $('claim-value').value,
+      details: $('claim-details').value,
+    };
+    var box = $('claim-result');
+    box.classList.remove('hidden');
+    box.innerHTML = '<p class="muted">Building your letter…</p>';
+    api('/api/tools/claim', { method: 'POST', body: JSON.stringify(payload) })
+      .then(function (d) {
+        box.innerHTML =
+          '<div class="row"><span>Claim type</span><strong>' + esc(d.label) + '</strong></div>' +
+          '<h3 style="margin:1rem 0 0.4rem">Subject line</h3>' +
+          '<p><strong>' + esc(d.subject) + '</strong> <button class="btn btn-ghost btn-sm" data-copy="claim-subject">Copy</button></p>' +
+          '<h3 style="margin:1rem 0 0.4rem">Letter</h3>' +
+          '<p style="white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem" id="claim-body">' + esc(d.body) + '</p>' +
+          '<button class="btn btn-primary" data-copy="claim-body" style="margin-top:0.75rem">Copy letter</button> ' +
+          '<span class="tiny">Paste it into a Seller Support case (Seller Central → Help → Get support).</span>' +
+          '<span id="claim-subject" class="hidden">' + esc(d.subject) + '</span>';
+      })
+      .catch(function (err) { box.innerHTML = '<p class="form-error">Error: ' + esc(err.message) + '</p>'; });
   });
 
-  // ---------- Research templates → copilot ----------
-  document.querySelectorAll('.template').forEach(function (btn) {
+  // ---------- Listing builder ----------
+  $('btn-listing-gen').addEventListener('click', function () {
+    var payload = {
+      brand: $('list-brand').value,
+      name: $('list-name').value,
+      audience: $('list-audience').value,
+      features: $('list-features').value,
+      keywords: $('list-keywords').value,
+    };
+    if (!payload.name.trim()) { alert('Please enter your product name first.'); return; }
+    var box = $('listing-result');
+    box.classList.remove('hidden');
+    box.innerHTML = '<p class="muted">Building your listing…</p>';
+    api('/api/tools/listing', { method: 'POST', body: JSON.stringify(payload) })
+      .then(function (d) {
+        var html = '<div class="row"><span>Title length</span><strong>' + d.titleLength + ' / 200 chars</strong></div>' +
+          '<h3 style="margin:1rem 0 0.4rem">Title</h3><p><strong>' + esc(d.title) + '</strong></p>' +
+          '<button class="btn btn-ghost btn-sm" data-copytext="' + esc(d.title).replace(/"/g, '&quot;') + '">Copy title</button>' +
+          '<h3 style="margin:1rem 0 0.4rem">Bullet points</h3><ul>' +
+          d.bullets.map(function (b) { return '<li style="margin-bottom:0.5rem">' + esc(b) + '</li>'; }).join('') + '</ul>' +
+          '<button class="btn btn-ghost btn-sm" data-copytext="' + esc(d.bullets.map(function (b, i) { return (i + 1) + '. ' + b; }).join('\n')).replace(/"/g, '&quot;') + '">Copy bullets</button>' +
+          '<h3 style="margin:1rem 0 0.4rem">Description</h3><p style="white-space:pre-wrap">' + esc(d.description) + '</p>' +
+          '<button class="btn btn-ghost btn-sm" data-copytext="' + esc(d.description).replace(/"/g, '&quot;') + '">Copy description</button>' +
+          '<h3 style="margin:1rem 0 0.4rem">Backend search terms <span class="tiny">(' + d.backendBytes + ' / 249 bytes)</span></h3>' +
+          '<p><code>' + esc(d.backendTerms || '—') + '</code></p>' +
+          (d.warnings.length ? '<p class="tiny" style="margin-top:0.75rem">⚠️ ' + d.warnings.map(esc).join('<br>⚠️ ') + '</p>' : '');
+        box.innerHTML = html;
+      })
+      .catch(function (err) { box.innerHTML = '<p class="form-error">Error: ' + esc(err.message) + '</p>'; });
+  });
+  $('link-listing-ask').addEventListener('click', function (e) {
+    e.preventDefault();
+    goToChatTab();
+    sendChat('Give me listing optimization advice for: ' + $('list-name').value.trim());
+  });
+
+  // ---------- Copy buttons (delegated) ----------
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-copy], [data-copytext]');
+    if (!btn) return;
+    var text = btn.getAttribute('data-copytext');
+    if (!text && btn.getAttribute('data-copy')) {
+      var el = document.getElementById(btn.getAttribute('data-copy'));
+      text = el ? el.textContent : '';
+    }
+    if (!text) return;
+    var done = function () { btn.textContent = 'Copied ✓'; setTimeout(function () { btn.textContent = btn.textContent.replace('Copied ✓', 'Copy'); }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta); done();
+    }
+  });
+
+  // ---------- Research tools ----------
+  document.querySelectorAll('.template[data-tool]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      goToChatTab();
-      sendChat(btn.getAttribute('data-prompt'));
+      ['budget', 'scorer', 'competitors', 'mistakes'].forEach(function (t) {
+        $('tool-' + t).classList.toggle('hidden', t !== btn.getAttribute('data-tool'));
+      });
+      $('tool-' + btn.getAttribute('data-tool')).scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
+
+  $('btn-budget-calc').addEventListener('click', function () {
+    var cogs = Number($('bd-cogs').value) || 0;
+    var qty = Math.max(0, Math.round(Number($('bd-qty').value) || 0));
+    var ship = Number($('bd-ship').value) || 0;
+    var photo = Number($('bd-photo').value) || 0;
+    var samples = Number($('bd-samples').value) || 0;
+    var ppc = Number($('bd-ppc').value) || 0;
+    var buffer = Number($('bd-buffer').value) || 0;
+    var inventory = cogs * qty + ship;
+    var subtotal = inventory + photo + samples + ppc;
+    var total = subtotal * (1 + buffer / 100);
+    $('budget-result').innerHTML =
+      '<div class="big">$' + total.toFixed(2) + ' <span class="muted" style="font-size:1rem">total launch budget</span></div>' +
+      '<div class="row"><span>Inventory (' + qty + ' units)</span><strong>$' + (cogs * qty).toFixed(2) + '</strong></div>' +
+      '<div class="row"><span>Inbound shipping</span><strong>$' + ship.toFixed(2) + '</strong></div>' +
+      '<div class="row"><span>Photography</span><strong>$' + photo.toFixed(2) + '</strong></div>' +
+      '<div class="row"><span>Samples</span><strong>$' + samples.toFixed(2) + '</strong></div>' +
+      '<div class="row"><span>First-month PPC</span><strong>$' + ppc.toFixed(2) + '</strong></div>' +
+      '<div class="row"><span>Buffer (' + buffer + '%)</span><strong>$' + (total - subtotal).toFixed(2) + '</strong></div>' +
+      '<p class="tiny">Excludes the $39.99/mo Professional seller plan and any trademark/brand registry costs.</p>';
+  });
+
+  $('btn-score-calc').addEventListener('click', function () {
+    var price = Number($('sc-price').value) || 0;
+    var cost = Number($('sc-cost').value) || 0;
+    var marginPts = price > 0 ? ((price - cost - price * 0.15 - 5.5) / price) * 100 : 0;
+    var score = 0, notes = [];
+    if (marginPts >= 30) { score += 3; notes.push('Margin looks healthy (~' + marginPts.toFixed(0) + '% est.).'); }
+    else if (marginPts >= 20) { score += 2; notes.push('Margin is workable (~' + marginPts.toFixed(0) + '% est.) — watch fees closely.'); }
+    else { score += 0; notes.push('Margin is thin (~' + marginPts.toFixed(0) + '% est.) — risky.'); }
+    var size = Number($('sc-size').value);
+    score += size;
+    notes.push(['Large/heavy hurts FBA fees.', 'Medium size is fine.', 'Small & light keeps fees low.'][size]);
+    var comp = Number($('sc-comp').value);
+    score += comp;
+    notes.push(['Very competitive — needs a real edge.', 'Contested — beatable with a better listing.', 'Soft competition — good sign.'][comp]);
+    var diff = Number($('sc-diff').value);
+    score += diff;
+    notes.push(['No differentiation is the riskiest bet.', 'A better listing can win a soft market.', 'A real improvement is your moat.'][diff]);
+    var repeat = Number($('sc-repeat').value);
+    score += repeat;
+    if (repeat) notes.push('Repeat purchases = compounding revenue.');
+    var verdict = score >= 8 ? ['Strong idea', 'positive'] : score >= 5 ? ['Worth testing', ''] : ['Risky', 'negative'];
+    $('score-result').innerHTML =
+      '<div class="big ' + verdict[1] + '">' + score + ' / 10 <span class="muted" style="font-size:1rem">' + verdict[0] + '</span></div>' +
+      '<ul>' + notes.map(function (n) { return '<li style="margin-bottom:0.4rem">' + esc(n) + '</li>'; }).join('') + '</ul>' +
+      '<p class="tiny">Estimate only — margin uses ~15% referral + $5.50 FBA fee. Verify real fees in Seller Central.</p>';
+  });
+
+  var COMPETITOR_ITEMS = [
+    ['Review count', 'Under 500 on page one = soft. Over 5,000 each = fortress.'],
+    ['Listing quality', 'Bad photos and thin bullets mean you can out-execute them.'],
+    ['Price cluster', 'Where do winners price? That\'s the market\'s verdict on value.'],
+    ['BSR', 'Lower Best Sellers Rank = selling more. Compare across competitors.'],
+    ['Differentiation gap', 'Is there a real improvement you could make?'],
+    ['Red flags', 'Big brands, patents, 10k+ reviews at 4.8 stars — walk away.'],
+  ];
+  (function renderComp() {
+    var box = $('competitor-checklist');
+    COMPETITOR_ITEMS.forEach(function (item) {
+      var label = document.createElement('label');
+      label.className = 'check-item';
+      label.innerHTML = '<input type="checkbox"><span><strong>' + esc(item[0]) + '</strong><small>' + esc(item[1]) + '</small></span>';
+      box.appendChild(label);
+    });
+  })();
 
   // ---------- Boot ----------
   loadPrice();

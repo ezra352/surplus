@@ -141,7 +141,7 @@
       <section id="tab-chat" class="tab-panel">
         <div id="chat-messages" class="chat-messages"></div>
         <div class="chat-input-row">
-          <input id="chat-input" type="text" placeholder="Ask your seller copilot anything…" autocomplete="off">
+          <input id="chat-input" type="text" placeholder="Ask about fees, reimbursements, listings, PPC…" autocomplete="off">
           <button class="btn btn-primary" id="chat-send">Send</button>
         </div>
       </section>
@@ -149,9 +149,34 @@
       <!-- RECOVERY -->
       <section id="tab-recovery" class="tab-panel hidden">
         <h2>Cash recovery</h2>
-        <p class="muted">Amazon sometimes owes sellers money — lost or damaged inventory, fee overcharges, wrong refunds. Work the checklist, then ask the copilot to draft your claim.</p>
+        <p class="muted">Amazon sometimes owes sellers money — lost or damaged inventory, fee overcharges, wrong refunds. Work the checklist, then build a claim letter ready to paste into Seller Support.</p>
         <div class="checklist" id="recovery-checklist"></div>
-        <button class="btn btn-primary" id="btn-recovery-ask">Ask copilot to draft my claim →</button>
+        <button class="btn btn-primary" id="btn-recovery-ask">Ask the copilot about these →</button>
+
+        <h3 style="margin-top:2rem">Claim letter builder</h3>
+        <p class="muted">Pick what happened, fill in the blanks, get a professional claim letter.</p>
+        <div class="form-grid">
+          <label>Claim type
+            <select id="claim-type">
+              <option value="lost-inbound">Lost inbound shipment</option>
+              <option value="damaged-warehouse">Damaged in FBA warehouse</option>
+              <option value="customer-damaged">Customer-damaged return charged to me</option>
+              <option value="fee-overcharge">FBA fee overcharge (wrong size tier)</option>
+              <option value="missing-removal">Missing removal shipment</option>
+              <option value="wrong-refund">Incorrect customer refund</option>
+            </select>
+          </label>
+          <label>Your name<input type="text" id="claim-name" placeholder="Jane Smith"></label>
+          <label>ASIN<input type="text" id="claim-asin" placeholder="B0XXXXXXXX"></label>
+          <label>Shipment / Order ID<input type="text" id="claim-shipid" placeholder="FBA15XXXXXXX"></label>
+          <label>Date<input type="text" id="claim-date" placeholder="2026-09-01"></label>
+          <label>Units affected<input type="number" id="claim-units" min="0" placeholder="20"></label>
+          <label>Units Amazon shows received<input type="number" id="claim-received" min="0" placeholder="0"></label>
+          <label>Value ($)<input type="number" id="claim-value" min="0" step="0.01" placeholder="300"></label>
+          <label>Extra details<textarea id="claim-details" rows="2" placeholder="Anything else Seller Support should know"></textarea></label>
+        </div>
+        <button class="btn btn-primary" id="btn-claim-build">Build my claim letter →</button>
+        <div id="claim-result" class="result hidden"></div>
       </section>
 
       <!-- INVENTORY -->
@@ -170,14 +195,18 @@
 
       <!-- LISTINGS -->
       <section id="tab-listings" class="tab-panel hidden">
-        <h2>Listing optimizer</h2>
-        <p class="muted">Describe your product and the copilot will write an optimized title, bullets, and description.</p>
+        <h2>Listing builder</h2>
+        <p class="muted">Describe your product in normal words — get an optimized title, bullet points, description, and backend search terms that follow Amazon's rules.</p>
         <div class="form-grid">
+          <label>Brand name<input type="text" id="list-brand" placeholder="e.g. AquaSteel"></label>
           <label>Product name<input type="text" id="list-name" placeholder="e.g. Insulated stainless water bottle 32oz"></label>
-          <label>Key features (one per line)<textarea id="list-features" rows="3" placeholder="Keeps drinks cold 24h&#10;Leak-proof lid&#10;Fits car cup holders"></textarea></label>
+          <label>Who is it for?<input type="text" id="list-audience" placeholder="e.g. gym-goers and hikers"></label>
+          <label>Key features (one per line)<textarea id="list-features" rows="4" placeholder="Keeps drinks cold 24h&#10;Leak-proof lid&#10;Fits car cup holders"></textarea></label>
           <label>Target keywords (comma separated)<input type="text" id="list-keywords" placeholder="water bottle, insulated bottle, gym bottle"></label>
         </div>
-        <button class="btn btn-primary" id="btn-listing-gen">Generate with AI →</button>
+        <button class="btn btn-primary" id="btn-listing-gen">Build my listing →</button>
+        <div id="listing-result" class="result hidden"></div>
+        <p class="tiny">Or <a href="#" id="link-listing-ask">ask the copilot</a> for listing advice.</p>
       </section>
 
       <!-- PROFIT -->
@@ -199,12 +228,82 @@
       <!-- RESEARCH -->
       <section id="tab-research" class="tab-panel hidden">
         <h2>Product research</h2>
-        <p class="muted">Pick a starting point — the copilot will guide the analysis.</p>
+        <p class="muted">Real tools, real math — no guessing.</p>
         <div class="template-list">
-          <button class="template" data-prompt="Help me evaluate a product idea for Amazon FBA. Ask me for the product, then walk me through demand signals, competition, differentiation, and a realistic launch budget.">💡 Evaluate a product idea</button>
-          <button class="template" data-prompt="Help me analyze competitors for a product I want to sell on Amazon. Tell me what information you need from me first.">⚔️ Analyze competitors</button>
-          <button class="template" data-prompt="Help me estimate a realistic launch budget for a new Amazon FBA product, including inventory, shipping, photography, and PPC. Ask me for my product details first.">💵 Estimate a launch budget</button>
-          <button class="template" data-prompt="What are the most common mistakes new Amazon FBA sellers make, and how do I avoid each one?">⚠️ Avoid beginner mistakes</button>
+          <button class="template" data-tool="budget">💵 Launch budget estimator</button>
+          <button class="template" data-tool="scorer">⭐ Product idea scorer</button>
+          <button class="template" data-tool="competitors">⚔️ Competitor checklist</button>
+          <button class="template" data-tool="mistakes">⚠️ Beginner mistakes guide</button>
+        </div>
+
+        <div id="tool-budget" class="result hidden" style="margin-top:1.25rem">
+          <h3>Launch budget estimator</h3>
+          <div class="form-grid" style="margin-top:1rem">
+            <label>Unit cost ($)<input type="number" id="bd-cogs" min="0" step="0.01" value="8.50"></label>
+            <label>First order quantity<input type="number" id="bd-qty" min="0" value="300"></label>
+            <label>Inbound shipping total ($)<input type="number" id="bd-ship" min="0" step="0.01" value="400"></label>
+            <label>Photography ($)<input type="number" id="bd-photo" min="0" step="0.01" value="300"></label>
+            <label>Samples ($)<input type="number" id="bd-samples" min="0" step="0.01" value="100"></label>
+            <label>First-month PPC budget ($)<input type="number" id="bd-ppc" min="0" step="0.01" value="500"></label>
+            <label>Buffer (%)<input type="number" id="bd-buffer" min="0" value="15"></label>
+          </div>
+          <button class="btn btn-primary" id="btn-budget-calc">Estimate</button>
+          <div id="budget-result" style="margin-top:1rem"></div>
+        </div>
+
+        <div id="tool-scorer" class="result hidden" style="margin-top:1.25rem">
+          <h3>Product idea scorer</h3>
+          <div class="form-grid" style="margin-top:1rem">
+            <label>Expected selling price ($)<input type="number" id="sc-price" min="0" step="0.01" value="29.99"></label>
+            <label>Unit cost + shipping ($)<input type="number" id="sc-cost" min="0" step="0.01" value="9.70"></label>
+            <label>Size &amp; weight
+              <select id="sc-size">
+                <option value="2">Small &amp; light (shoebox or smaller)</option>
+                <option value="1">Medium (microwave-size)</option>
+                <option value="0">Large or heavy</option>
+              </select>
+            </label>
+            <label>Top competitors' reviews
+              <select id="sc-comp">
+                <option value="2">Under 500 on page one (soft)</option>
+                <option value="1">500–2,000 (contested)</option>
+                <option value="0">Over 2,000 (fortress)</option>
+              </select>
+            </label>
+            <label>Can you differentiate?
+              <select id="sc-diff">
+                <option value="2">Yes — real improvement</option>
+                <option value="1">Slightly (better listing/photos)</option>
+                <option value="0">No — identical product</option>
+              </select>
+            </label>
+            <label>Repeat purchase?
+              <select id="sc-repeat">
+                <option value="1">Yes (consumable)</option>
+                <option value="0">No (one-time buy)</option>
+              </select>
+            </label>
+          </div>
+          <button class="btn btn-primary" id="btn-score-calc">Score my idea</button>
+          <div id="score-result" style="margin-top:1rem"></div>
+        </div>
+
+        <div id="tool-competitors" class="result hidden" style="margin-top:1.25rem">
+          <h3>Competitor checklist</h3>
+          <p class="muted">Open the top 5 listings for your keyword and check each one:</p>
+          <div class="checklist" id="competitor-checklist"></div>
+        </div>
+
+        <div id="tool-mistakes" class="result hidden" style="margin-top:1.25rem">
+          <h3>Beginner mistakes that kill new sellers</h3>
+          <div class="checklist">
+            <div class="check-item"><span><strong>1. Buying inventory before doing the math.</strong><small>Run the Profit tab first. Most "great ideas" die at the fee math.</small></span></div>
+            <div class="check-item"><span><strong>2. Ordering 1,000 units of product #1.</strong><small>Start with 200–300. A small live test teaches more than months of research.</small></span></div>
+            <div class="check-item"><span><strong>3. Ignoring the listing.</strong><small>Great product + lazy listing = no sales. Photos and copy are half the battle.</small></span></div>
+            <div class="check-item"><span><strong>4. Running out of stock in month two.</strong><small>Use the Inventory tab's reorder math from day one.</small></span></div>
+            <div class="check-item"><span><strong>5. Buying reviews or using hacks.</strong><small>Account death. Never worth it.</small></span></div>
+            <div class="check-item"><span><strong>6. Quitting at week 3.</strong><small>Listings take 60–90 days to find their level. Patience is a strategy.</small></span></div>
+          </div>
         </div>
       </section>
     </main>
