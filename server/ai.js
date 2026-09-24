@@ -75,6 +75,21 @@ function aiProvider() {
   return null;
 }
 
+// ---- Transient-failure retries ----
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+// Retries AI calls that fail transiently (rate limits, upstream hiccups, network
+// blips). Status 500 means a config problem — never retried. Returns the last result.
+async function withAiRetries(fn, attempts = 3) {
+  let last = null;
+  for (let i = 1; i <= attempts; i++) {
+    last = await fn();
+    if (last.status === 200 || last.status === 500) return last;
+    if (i < attempts) await sleep(1500 * i); // 1.5s, then 3s
+  }
+  return last;
+}
+
 async function openaiReply(messages) {
   let apiRes;
   const controller = new AbortController();
@@ -198,8 +213,18 @@ router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) 
     });
   }
 
-  const result = provider === 'openai' ? await openaiReply(messages) : await geminiReply(messages);
-  if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+  const attempt = provider === 'openai' ? () => openaiReply(messages) : () => geminiReply(messages);
+  const result = await withAiRetries(attempt);
+  if (result.status === 500) {
+    // Config problem (bad key) — needs fixing, don't hide it.
+    return res.status(500).json({ error: result.error });
+  }
+  if (result.status !== 200) {
+    // AI is having a moment — answer from the built-in playbook so the chat never errors out.
+    console.error('AI failed after retries, using playbook fallback:', result.error);
+    const answer = findAnswer(lastUserMessage(messages)) || fallbackAnswer();
+    return res.json({ reply: answer, used, limit: config.dailyMessageLimit, source: 'playbook' });
+  }
 
   db.incrementDailyUsage(req.user.id);
   res.json({ reply: result.reply, used: used + 1, limit: config.dailyMessageLimit, source: 'ai' });
@@ -224,4 +249,4 @@ router.post('/tools/listing', requireAuth, requirePremium, chatLimiter, (req, re
   }
 });
 
-module.exports = { router };
+module.exports = { router, withAiRetries };
