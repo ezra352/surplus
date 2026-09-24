@@ -36,7 +36,7 @@ const config = {
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
 
   geminiApiKey: process.env.GEMINI_API_KEY || null,
-  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
 
   // Max AI chat messages per user per day (cost control).
   dailyMessageLimit: parseInt(process.env.DAILY_MESSAGE_LIMIT || '100', 10),
