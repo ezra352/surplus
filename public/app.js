@@ -355,6 +355,47 @@
     sendChat('Give me listing optimization advice for: ' + $('list-name').value.trim());
   });
 
+  // ---------- Keyword generator ----------
+  $('btn-kw-gen').addEventListener('click', function () {
+    var product = $('kw-product').value.trim();
+    if (!product) { alert('Please describe your product first.'); return; }
+    var box = $('kw-result');
+    box.classList.remove('hidden');
+    box.innerHTML = '<p class="muted">Researching keywords…</p>';
+    api('/api/tools/keywords', { method: 'POST', body: JSON.stringify({ product: product, audience: $('kw-audience').value.trim() }) })
+      .then(function (d) {
+        var kw = d.keywords || {};
+        function copyBtn(label, items) {
+          if (!items || !items.length) return '';
+          return '<button class="btn btn-ghost btn-sm" data-copytext="' +
+            esc(items.join('\n')).replace(/"/g, '&quot;') + '">Copy ' + esc(label) + '</button>';
+        }
+        function group(title, items, extra) {
+          if (!items || !items.length) return '';
+          return '<h3 style="margin:1rem 0 0.4rem">' + esc(title) + '</h3>' +
+            (extra || '') +
+            '<ul>' + items.map(function (k) { return '<li>' + esc(k) + '</li>'; }).join('') + '</ul>' +
+            copyBtn(title.toLowerCase(), items);
+        }
+        var backendLine = '';
+        if (kw.backend && kw.backend.length) {
+          var joined = kw.backend.join(' ');
+          var bytes = (typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(joined).length : joined.length);
+          backendLine = '<p><code>' + esc(joined) + '</code></p>' +
+            '<p class="tiny">' + bytes + ' / 249 bytes — paste into Amazon\'s backend search-terms field.</p>';
+        }
+        var html =
+          group('Primary keywords', kw.primary) +
+          group('Long-tail phrases', kw.longtail) +
+          '<h3 style="margin:1rem 0 0.4rem">Backend search terms</h3>' + backendLine +
+          copyBtn('backend terms', kw.backend) +
+          group('PPC suggestions', kw.ppc) +
+          group('Negative keywords (PPC)', kw.negative);
+        box.innerHTML = html || '<p class="muted">No keywords came back — try again.</p>';
+      })
+      .catch(function (err) { box.innerHTML = '<p class="form-error">Error: ' + esc(err.message) + '</p>'; });
+  });
+
   // ---------- Copy buttons (delegated) ----------
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-copy], [data-copytext]');

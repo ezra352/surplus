@@ -249,4 +249,83 @@ router.post('/tools/listing', requireAuth, requirePremium, chatLimiter, (req, re
   }
 });
 
-module.exports = { router, withAiRetries };
+// ---------- AI keyword generator ----------
+function parseKeywordJson(text) {
+  if (!text) return null;
+  let t = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const start = t.indexOf('{');
+  const end = t.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  let data;
+  try {
+    data = JSON.parse(t.slice(start, end + 1));
+  } catch (e) {
+    return null;
+  }
+  if (!data || typeof data !== 'object') return null;
+  const arr = (v) => (Array.isArray(v) ? v.map(String).map((s) => s.trim()).filter(Boolean).slice(0, 20) : []);
+  const keywords = {
+    primary: arr(data.primary),
+    longtail: arr(data.longtail),
+    backend: arr(data.backend),
+    ppc: arr(data.ppc),
+    negative: arr(data.negative),
+  };
+  if (!keywords.primary.length) return null;
+  return keywords;
+}
+
+router.post('/tools/keywords', requireAuth, requirePremium, chatLimiter, async (req, res) => {
+  const product = String((req.body && req.body.product) || '').trim().slice(0, 500);
+  const audience = String((req.body && req.body.audience) || '').trim().slice(0, 200);
+  if (!product) return res.status(400).json({ error: 'Please describe your product first.' });
+
+  const provider = aiProvider();
+  if (!provider) {
+    return res.status(503).json({ error: 'Keyword AI is not enabled yet.' });
+  }
+
+  const used = db.getDailyUsage(req.user.id);
+  if (used >= config.dailyMessageLimit) {
+    return res.status(429).json({
+      error: `Daily AI limit reached (${config.dailyMessageLimit}/day on Premium). It resets tomorrow.`,
+    });
+  }
+
+  const prompt = `Generate Amazon keywords for this product: "${product}"${audience ? ` (target audience: ${audience})` : ''}.
+
+Return ONLY valid JSON (no markdown, no code fences, no other text) with exactly these keys:
+{
+  "primary": ["5-8 main keywords shoppers type to find this product"],
+  "longtail": ["8-12 longer specific phrases (3+ words) with buyer intent"],
+  "backend": ["backend search terms for Amazon's hidden search-terms field: single words and short phrases, no repeats, no brand names"],
+  "ppc": ["6-10 keywords worth bidding on in PPC"],
+  "negative": ["5-8 negative keywords to exclude in PPC (irrelevant or wrong-intent terms)"]
+}
+Rules: US English, all lowercase, no duplicates across groups.`;
+
+  const attempt = async () => {
+    const r = provider === 'openai'
+      ? await openaiReply([{ role: 'user', content: prompt }])
+      : await geminiReply([{ role: 'user', content: prompt }]);
+    if (r.status !== 200) return r;
+    const data = parseKeywordJson(r.reply);
+    if (!data) return { status: 502, error: 'Bad AI response format. Please try again.' };
+    return { status: 200, data };
+  };
+
+  const result = await withAiRetries(attempt);
+  if (result.status === 500) {
+    // Config problem (bad key) — needs fixing, don't hide it.
+    return res.status(500).json({ error: 'Keyword AI is not configured correctly. Please contact support.' });
+  }
+  if (result.status !== 200) {
+    console.error('Keyword AI failed:', result.error);
+    return res.status(502).json({ error: 'The keyword AI is having trouble right now. Please try again in a moment.' });
+  }
+
+  db.incrementDailyUsage(req.user.id);
+  res.json({ keywords: result.data, used: used + 1, limit: config.dailyMessageLimit });
+});
+
+module.exports = { router, withAiRetries, parseKeywordJson };
