@@ -8,8 +8,9 @@ const REQUIRED = [
   'STRIPE_PRICE_ID',
   'STRIPE_WEBHOOK_SECRET',
 ];
-// OPENAI_API_KEY is optional: the app boots and all non-AI tools work without it.
-// AI routes return a friendly "not enabled" message until a key is configured.
+// OPENAI_API_KEY and GEMINI_API_KEY are both optional: the app boots and all
+// non-AI tools work without either. Priority: OpenAI first, then Gemini, then
+// the built-in playbook. Gemini's free tier (via Google AI Studio) costs $0.
 
 const missing = REQUIRED.filter((k) => !process.env[k]);
 if (missing.length > 0) {
@@ -33,6 +34,9 @@ const config = {
 
   openaiApiKey: process.env.OPENAI_API_KEY || null,
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+
+  geminiApiKey: process.env.GEMINI_API_KEY || null,
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
 
   // Max AI chat messages per user per day (cost control).
   dailyMessageLimit: parseInt(process.env.DAILY_MESSAGE_LIMIT || '100', 10),

@@ -1,8 +1,10 @@
 // Chat + deterministic tools proxy. Premium subscribers only.
-// If an OpenAI key is configured, /api/chat uses it (existing behavior).
-// If not, it answers from the built-in seller playbook (server/knowledge.js)
-// so the copilot is useful with zero AI cost. Nothing here is deleted —
-// the AI path is kept intact and takes priority when enabled.
+// AI providers, in priority order:
+//   1. OpenAI (OPENAI_API_KEY) — paid, best quality
+//   2. Gemini  (GEMINI_API_KEY) — free tier via Google AI Studio, $0
+// If neither key is configured, /api/chat answers from the built-in seller
+// playbook (server/knowledge.js) so the copilot is useful with zero AI cost.
+// Nothing here is deleted — every path is kept intact.
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
@@ -61,12 +63,19 @@ function lastUserMessage(messages) {
 }
 
 router.get('/chat/limit', requireAuth, (req, res) => {
-  // With AI enabled the daily cap applies; the playbook is unlimited.
-  if (!config.openaiApiKey) return res.json({ used: 0, limit: null, unlimited: true });
+  // With any AI provider enabled the daily cap applies; the playbook is unlimited.
+  if (!aiProvider()) return res.json({ used: 0, limit: null, unlimited: true });
   res.json({ used: db.getDailyUsage(req.user.id), limit: config.dailyMessageLimit });
 });
 
-async function aiReply(messages) {
+// Which AI provider is configured? 'openai' | 'gemini' | null
+function aiProvider() {
+  if (config.openaiApiKey) return 'openai';
+  if (config.geminiApiKey) return 'gemini';
+  return null;
+}
+
+async function openaiReply(messages) {
   let apiRes;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000); // 30s upstream timeout
@@ -114,6 +123,61 @@ async function aiReply(messages) {
   return { status: 200, reply };
 }
 
+async function geminiReply(messages) {
+  // Google's free tier: no SDK needed, plain REST call.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.geminiModel)}:generateContent`;
+  const contents = messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  let apiRes;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    apiRes = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': config.geminiApiKey,
+      },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents,
+        generationConfig: { maxOutputTokens: 1200, temperature: 0.7 },
+      }),
+    });
+  } catch (e) {
+    console.error('Gemini request failed:', e.message);
+    return { status: 502, error: 'The AI service is unreachable right now. Please try again shortly.' };
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!apiRes.ok) {
+    const status = apiRes.status;
+    console.error('Gemini API error:', status);
+    if (status === 400) return { status: 500, error: 'AI is not configured correctly. Please contact support.' };
+    if (status === 429) return { status: 429, error: 'The free AI quota is used up for now. Please try again later.' };
+    return { status: 502, error: 'The AI service returned an error. Please try again.' };
+  }
+
+  let data;
+  try {
+    data = await apiRes.json();
+  } catch (e) {
+    return { status: 502, error: 'Could not read the AI response. Please try again.' };
+  }
+
+  const parts = data.candidates && data.candidates[0] && data.candidates[0].content
+    ? data.candidates[0].content.parts
+    : null;
+  const reply = parts && parts.map((p) => p.text || '').join('').trim();
+  if (!reply) return { status: 502, error: 'Empty AI response. Please try again.' };
+  return { status: 200, reply };
+}
+
 router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) => {
   const messages = sanitizeMessages(req.body && req.body.messages);
   if (!messages) {
@@ -121,7 +185,8 @@ router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) 
   }
 
   // No AI key: answer from the built-in seller playbook (free, unlimited).
-  if (!config.openaiApiKey) {
+  const provider = aiProvider();
+  if (!provider) {
     const answer = findAnswer(lastUserMessage(messages)) || fallbackAnswer();
     return res.json({ reply: answer, used: 0, limit: null, unlimited: true, source: 'playbook' });
   }
@@ -133,7 +198,7 @@ router.post('/chat', requireAuth, requirePremium, chatLimiter, async (req, res) 
     });
   }
 
-  const result = await aiReply(messages);
+  const result = provider === 'openai' ? await openaiReply(messages) : await geminiReply(messages);
   if (result.status !== 200) return res.status(result.status).json({ error: result.error });
 
   db.incrementDailyUsage(req.user.id);
